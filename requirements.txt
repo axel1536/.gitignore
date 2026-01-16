@@ -1,6 +1,5 @@
 streamlit
-ultralytics
-opencv-python-headless  # Usa esta versión "headless" porque en Cloud no hay interfaz gráfica
+inference-sdk
 pillow
 numpy
-torch  # ultralytics lo necesita, pero a veces ayuda especificarlo
+opencv-python-headless
