@@ -43,7 +43,7 @@ if uploaded_file is not None:
     st.subheader("Imagen original")
     st.image(image, use_column_width=True)
 
-    if st.button("Detectar y Contar Caños"):
+if st.button("Detectar y Contar Caños"):
     with st.spinner("Enviando a Roboflow para inferencia..."):
         # Preparar imagen como bytes
         buffered = io.BytesIO()
