@@ -5,6 +5,7 @@ import io
 import numpy as np
 import cv2
 from collections import Counter
+MODEL_ID = "materiales-h0rz3/1"
 
 # Configuración de página
 st.set_page_config(
