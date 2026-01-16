@@ -43,57 +43,70 @@ if uploaded_file is not None:
     st.image(image, use_column_width=True)
 
     if st.button("Detectar y Contar Caños"):
-        with st.spinner("Enviando a Roboflow para inferencia..."):
-            # Preparar imagen como bytes
-            buffered = io.BytesIO()
-            image.save(buffered, format="JPEG")
-            img_bytes = buffered.getvalue()
+    with st.spinner("Enviando a Roboflow para inferencia..."):
+        # Preparar imagen como bytes
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        img_bytes = buffered.getvalue()
 
-            # Inferencia
-            try:
-                predictions = client.infer(
-                    img_bytes,
-                    model_id=MODEL_ID,
-                    confidence=conf_threshold,
-                    # Opcional: si quieres imagen anotada de vuelta
-                    # visualize=True  # Algunos SDK lo soportan, prueba
-                )
+        # Inferencia SIN 'confidence' en infer()
+        try:
+            predictions = client.infer(
+                img_bytes,
+                model_id=MODEL_ID
+                # QUITA ESTO: , confidence=conf_threshold
+            )
 
-                preds = predictions["predictions"]  # Lista de detecciones
+            preds = predictions.get("predictions", [])  # Asegura que sea lista
 
-                if not preds:
-                    st.warning("No se detectaron caños. Prueba bajando el umbral.")
-                else:
-                    # Conteo
-                    class_names = [p["class"] for p in preds]
-                    conteo_por_clase = Counter(class_names)
-                    total = len(preds)
+            if not preds:
+                st.warning("No se detectaron caños. Prueba con otra foto o verifica si el modelo está activo en Roboflow.")
+            else:
+                # Filtrar manualmente por confianza si quieres (ej: > 0.4)
+                filtered_preds = [p for p in preds if p.get("confidence", 0) >= conf_threshold]
 
-                    # Mostrar métricas bonitas
-                    st.subheader("Resultados")
-                    st.metric("Total de caños detectados", total)
+                if not filtered_preds:
+                    st.warning(f"No se detectaron caños con confianza >= {conf_threshold}. Baja el umbral o usa otra imagen.")
+                    filtered_preds = preds  # Usa todos si no hay después del filtro
 
-                    cols = st.columns(len(conteo_por_clase) or 1)
+                # Conteo con los filtrados
+                class_names = [p["class"] for p in filtered_preds]
+                conteo_por_clase = Counter(class_names)
+                total = len(filtered_preds)
+
+                # Mostrar resultados
+                st.subheader("Resultados")
+                st.metric("Total de caños detectados", total)
+
+                if conteo_por_clase:
+                    cols = st.columns(len(conteo_por_clase))
                     for idx, (clase, cant) in enumerate(conteo_por_clase.items()):
-                        with cols[idx % len(cols)]:
+                        with cols[idx]:
                             st.metric(clase.capitalize(), cant)
+                else:
+                    st.info("Ninguna clase detectada después del filtro.")
 
-                    # Detalles
-                    with st.expander("Detalles de detecciones"):
-                        for i, p in enumerate(preds):
-                            st.write(f"- {p['class']} → Confianza: {p['confidence']:.2%} | Posición: x={p['x']:.0f}, y={p['y']:.0f}")
+                # Detalles
+                with st.expander("Detalles de detecciones"):
+                    for i, p in enumerate(filtered_preds):
+                        st.write(f"- {p['class']} → Confianza: {p['confidence']:.2%} | Posición: x={p['x']:.0f}, y={p['y']:.0f}")
 
-                    # Mostrar imagen anotada (si el SDK devuelve base64 o usa cv2 para dibujar)
-                    # Alternativa simple: dibujar manualmente
-                    img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-                    for p in preds:
-                        x, y, w, h = int(p["x"] - p["width"]/2), int(p["y"] - p["height"]/2), int(p["width"]), int(p["height"])
-                        cv2.rectangle(img_cv, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                        cv2.putText(img_cv, f"{p['class']} {p['confidence']:.2f}", (x, y-10),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                    annotated_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
-                    st.subheader("Imagen con detecciones")
-                    st.image(annotated_rgb, use_column_width=True)
+                # Dibujar bounding boxes manualmente
+                img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+                for p in filtered_preds:
+                    x1 = int(p["x"] - p["width"] / 2)
+                    y1 = int(p["y"] - p["height"] / 2)
+                    x2 = int(p["x"] + p["width"] / 2)
+                    y2 = int(p["y"] + p["height"] / 2)
+                    cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    label = f"{p['class']} {p['confidence']:.2f}"
+                    cv2.putText(img_cv, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-            except Exception as e:
-                st.error(f"Error en inferencia: {str(e)} - Verifica MODEL_ID y API_KEY.")
+                annotated_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+                st.subheader("Imagen con detecciones")
+                st.image(annotated_rgb, use_column_width=True)
+
+        except Exception as e:
+            st.error(f"Error en inferencia: {str(e)}")
+            st.info("Verifica: 1) MODEL_ID correcto (ej: 'tu-proyecto/1'), 2) API_KEY en Secrets, 3) Modelo activo en Roboflow Deploy.")
+Pasos para aplicar el fix
