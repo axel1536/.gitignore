@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as Yolo
 import requests
 from PIL import Image
 import io
